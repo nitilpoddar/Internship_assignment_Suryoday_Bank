@@ -8,6 +8,9 @@ import pandas as pd
 import numpy as np
 import logging as log
 
+#for logging setup
+log.basicConfig(level=log.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 
 
 ########################        SQL CONNECTION        ########################
@@ -93,6 +96,9 @@ class Student(BaseModel):
         if value is not None:
             return {k.upper(): v for k, v in value.items()}
         return value
+    
+    
+
         
 
         
@@ -133,6 +139,8 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
         exam_name = cursor.fetchone()[0]
         print("THE EXAM NAME IS: ", exam_name)
 
+        
+
         qualify_exam_keys = [k.upper() for k in student_dataframe["qualifying_result"][0].keys()]
 
         for m in student_dataframe["qualifying_result"][0].keys():
@@ -149,11 +157,77 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
             elif student_dataframe["qualifying_result"][0][exam_name] == False:
                 return {"message": f"You have not qualified the {exam_name} exam for the desired course LINE 136"}
         
+        
     except Exception as e:
         return {"message": str(e)+ "LINE 154"}
     
 
+    #-----------------!! STUDENT qualification percentage validation FOR DESIRED COURSE !!-----------------#
 
-    return {"message": "Data is good till now"}
+    student_avg = int(np.mean(list(student_dataframe["marksheet"][0].values())))
+    student_dataframe["average"] = student_avg
+
+    try:
+        cursor.execute("""
+                       SELECT B.MARKS_PERCENT 
+                        FROM DEGREE D 
+                        INNER JOIN QUALIFY_EXAM QF ON D.QUALIFY_ID = QF.ID
+                        INNER JOIN BRANCH B ON B.DEGREE_ID = D.ID
+
+                        WHERE B.BRANCH_NAME = ?;""", student_dataframe["desired_course"][0])
+        req_avg = int(cursor.fetchone()[0])
+
+        if student_avg < req_avg:
+            return {"message": f"Your average is {student_avg} and the required average is {req_avg}. You are not eligible for the desired course"}
+        
+
+    
+    
+    except Exception as e:
+        return {"message": str(e)+ "LINE 178"}
+
+    
+    #-----------------!! Getting recommended courses !!-----------------#
+
+    try:
+        PLACEHOLDER = ','.join('?' for _ in student_dataframe["marksheet"][0].keys())
+        cursor.execute("""
+                        SELECT B.BRANCH_NAME, B.MARKS_PERCENT, QF.EXAM_NAME
+                        FROM DEGREE D
+                        INNER JOIN BRANCH B ON B.DEGREE_ID = D.ID
+                        INNER JOIN QUALIFY_EXAM QF ON D.QUALIFY_ID = QF.ID
+                        INNER JOIN BRANCH_SUBJECT BS ON B.ID = BS.BRANCH_ID
+                        INNER JOIN SUBJECT S ON S.ID = BS.SUBJECT_ID
+                        WHERE B.MARKS_PERCENT <= ? AND S.SUBJECT_NAME IN ({PLACEHOLDER})
+                        GROUP BY B.BRANCH_NAME, B.MARKS_PERCENT, QF.EXAM_NAME
+                        HAVING COUNT(*) = (
+                            SELECT COUNT(*) 
+                            FROM BRANCH_SUBJECT BS2 
+                            WHERE BS2.BRANCH_ID = B.ID); 
+                       """, [student_avg] + [sub for sub in student_dataframe["marksheet"][0].keys()] )
+        
+        recommended = []
+        for row in cursor.fetchall():
+            branch_name, marks_percent, exam = row
+
+            if exam == 'NONE' or (exam in student_dataframe["qualifying_result"][0].keys() and student_dataframe["qualifying_result"][0][exam] == True):
+                recommended.append({
+                    "branch": branch_name,
+                    "marks_percent": marks_percent,
+                    "exam": exam
+                })
+        log.info("RECOMMENDED COURSES FETCHED")
+
+        return {"message": "You are eligible for the desired course", "recommended_courses": recommended}
+    
+    except Exception as e:
+        return {"message": str(e)+ "LINE 222"}
+
+
+
+    
+
+
+    
 
     
