@@ -265,22 +265,25 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
             print("THE INSERT DATA IS: ", _)
         
         # print("The student dataframe is ", student_dataframe.to_string())
-        cursor.execute("""INSERT INTO Student (NAME, AGE, DESIRED_COURSE) VALUES ('TEST', 20, 'COMPUTER SCIENCE ENGINEERING');""")
+        # cursor.execute("""INSERT INTO Student (NAME, AGE, DESIRED_COURSE) VALUES ('TEST', 20, 'COMPUTER SCIENCE ENGINEERING');""")
 
         #code working till here ???????????????????????????????????????????????
         cursor.execute("""
             INSERT INTO Student (NAME, AGE, DESIRED_COURSE)
             VALUES (?, ?, ?);
             SELECT SCOPE_IDENTITY() AS student_id;
+            
         """, *insert_data)
 
         log.info("INSERTING STUDENT DATA INTO DATABASE COMPLETED")
 
+        
+
         conn.commit()
 
-        student_id = cursor.fetchone()[0]
+        student_id = cursor.fetchall()[0][0]
         print("THE STUDENT ID IS: ", student_id)
-
+        
         log.info("STUDENT ID FETCHED")
 
         
