@@ -148,6 +148,9 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
 
         print("THE QUALIFY EXAM KEYS ARE: ", qualify_exam_keys)
         
+
+        #-------------------------- CODE WORKING FINE TILL HERE --------------------------#
+        
         if not exam_name == 'NONE':
             
             if exam_name not in qualify_exam_keys:
@@ -184,12 +187,28 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
     except Exception as e:
         return {"message": str(e)+ "LINE 178"}
 
-    
-    #-----------------!! Getting recommended courses !!-----------------#
+    log.info("RECOMMENDED COURSES FETCHED")       #so the course is workig till here
 
+    #-----------------!! Getting recommended courses !!-----------------#
+    recommended = []
     try:
+        # this is a debugging print function to check if the marksheet has correctness in it
+        for _ in student_dataframe["marksheet"][0].keys():
+            print("THE KEYS ARE: ", _)
+
         PLACEHOLDER = ','.join('?' for _ in student_dataframe["marksheet"][0].keys())
-        cursor.execute("""
+
+        #a debug print to check the placeholder
+        print("THE PLACEHOLDER IS: ", PLACEHOLDER)
+
+        #ANOTHER DEBUG PRINT STATEMENT TO CHECK THE PLACEHOLDER VALUES FOR THE QUERIES
+
+        XX = [student_avg] + [sub for sub in student_dataframe["marksheet"][0].keys()]
+
+        for _ in XX:
+            print("THE PLACEHOLDER VALUES ARE: ", _)
+
+        cursor.execute(f"""
                         SELECT B.BRANCH_NAME, B.MARKS_PERCENT, QF.EXAM_NAME
                         FROM DEGREE D
                         INNER JOIN BRANCH B ON B.DEGREE_ID = D.ID
@@ -197,14 +216,19 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
                         INNER JOIN BRANCH_SUBJECT BS ON B.ID = BS.BRANCH_ID
                         INNER JOIN SUBJECT S ON S.ID = BS.SUBJECT_ID
                         WHERE B.MARKS_PERCENT <= ? AND S.SUBJECT_NAME IN ({PLACEHOLDER})
-                        GROUP BY B.BRANCH_NAME, B.MARKS_PERCENT, QF.EXAM_NAME
+                        GROUP BY B.ID, B.BRANCH_NAME, B.MARKS_PERCENT, QF.EXAM_NAME
                         HAVING COUNT(*) = (
                             SELECT COUNT(*) 
                             FROM BRANCH_SUBJECT BS2 
-                            WHERE BS2.BRANCH_ID = B.ID); 
-                       """, [student_avg] + [sub for sub in student_dataframe["marksheet"][0].keys()] )
+                            WHERE BS2.BRANCH_ID = B.ID) 
+                       """, *XX )
         
-        recommended = []
+        
+        for tup in cursor.fetchall():
+            for vv in tup:
+                print(f"{vv}", end = " ")
+            print() #debug print to check the recommended courses
+        
         for row in cursor.fetchall():
             branch_name, marks_percent, exam = row
 
@@ -214,12 +238,12 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
                     "marks_percent": marks_percent,
                     "exam": exam
                 })
-        log.info("RECOMMENDED COURSES FETCHED")
+        log.info("RECOMMENDED COURSES FETCHED") #this is the last log statement which is working fine
     except Exception as e:
         return {"message": str(e)+ "LINE 222"}
     
     try:
-        cursor.execute("""
+        cursor.execute(f"""
             INSERT INTO Student (NAME, AGE, DESIRED_COURSE)
             VALUES (?, ?, ?);
             SELECT SCOPE_IDENTITY() AS student_id;
