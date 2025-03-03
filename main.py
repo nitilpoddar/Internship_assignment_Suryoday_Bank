@@ -139,8 +139,6 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
         exam_name = cursor.fetchone()[0]
         print("THE EXAM NAME IS: ", exam_name)
 
-        
-
         qualify_exam_keys = [k.upper() for k in student_dataframe["qualifying_result"][0].keys()]
 
         for m in student_dataframe["qualifying_result"][0].keys():
@@ -217,12 +215,15 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
                     "exam": exam
                 })
         log.info("RECOMMENDED COURSES FETCHED")
-
+    except Exception as e:
+        return {"message": str(e)+ "LINE 222"}
+    
+    try:
         cursor.execute("""
             INSERT INTO Student (NAME, AGE, DESIRED_COURSE)
             VALUES (?, ?, ?);
             SELECT SCOPE_IDENTITY() AS student_id;
-        """, (student_dataframe["name"][0], student_dataframe["age"][0], student.desired_course))
+        """, (student_dataframe["name"][0], int(student_dataframe["age"][0]), student_dataframe["desired_course"][0]))
         student_id = int(cursor.fetchone()[0])
         
         for subject, mark in student_dataframe["marksheet"][0].items():
@@ -232,12 +233,13 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
                 INSERT INTO StudentSubject (STUDENT_ID, SUBJECT_ID, MARKS)
                 VALUES (?, ?, ?);
             """, (student_id, subject_id, mark))
-        cursor.commit()
+        conn = cursor.connection
+        conn.commit()
         
         log.info("STUDENT ENTRY ADDED TO DATABASE")
         
-        recommended = [{"branch": desired_course, "marks_percent": req_avg, "exam": required_exam}]
+        recommended = [{"branch": student_dataframe["desired_course"][0], "marks_percent": req_avg, "exam": exam_name}]
         return {"message": "You are eligible for the desired course", "recommended_courses": recommended}
     
     except Exception as e:
-        return {"message": str(e)+ "LINE 222"}
+        return {"message": str(e)}
