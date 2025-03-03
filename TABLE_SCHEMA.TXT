@@ -81,6 +81,22 @@ try:
             raise Exception("LINE 102Invalid Marks: Marks should be between 0 and 100")
         
         
+
+        {
+    "name": "John Doe",
+    "age": 18,
+    "gender": "MALE",
+    "marksheet": {
+        "PHYSICS": 85,
+        "CHEMISTRY": 80,
+        "MATHEMATICS": 90,
+        "BIOLOGY": 70,
+        "ENGLISH": 65,
+        "HISTORY": 60
+    },
+    "qualifying_result": {"JEE": true},
+    "desired_course": "COMPUTER SCIENCE ENGINEERING"
+}
         
         
         

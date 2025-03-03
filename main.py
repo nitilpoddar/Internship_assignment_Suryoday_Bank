@@ -124,6 +124,8 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
         
     #-----------------!! DESIRED COURSE validation !!-----------------#
     
+    conn = cursor.connection
+
     try:
         cursor.execute("SELECT BRANCH_NAME FROM BRANCH ORDER BY ID;")
         branch_names = cursor.fetchall()
@@ -263,6 +265,7 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
             print("THE INSERT DATA IS: ", _)
         
         # print("The student dataframe is ", student_dataframe.to_string())
+        cursor.execute("""INSERT INTO Student (NAME, AGE, DESIRED_COURSE) VALUES ('TEST', 20, 'COMPUTER SCIENCE ENGINEERING');""")
 
         #code working till here ???????????????????????????????????????????????
         cursor.execute("""
@@ -270,9 +273,17 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
             VALUES (?, ?, ?);
             SELECT SCOPE_IDENTITY() AS student_id;
         """, *insert_data)
-        student_id = int(cursor.fetchone()[0])
 
         log.info("INSERTING STUDENT DATA INTO DATABASE COMPLETED")
+
+        conn.commit()
+
+        student_id = cursor.fetchone()[0]
+        print("THE STUDENT ID IS: ", student_id)
+
+        log.info("STUDENT ID FETCHED")
+
+        
 
         
         for subject, mark in student_dataframe["marksheet"][0].items():
