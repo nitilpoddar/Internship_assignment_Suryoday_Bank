@@ -38,6 +38,16 @@ class Student(BaseModel):
     qualifying_result: dict[ str , bool] | None = None
     desired_course: Course
 
+    #-----------------!! DESIRED COURSE !!-----------------#
+    @field_validator("desired_course", mode="before")
+    @classmethod
+    def validate_desired_course(cls, value):
+        for member in Course:
+            if member.value == value:
+                return Course(member).value
+        raise ValueError("Invalid Course")
+    
+
     #-----------------!! AGE VALIDATION !!-----------------#
     @field_validator("age", mode="before")
     @classmethod
@@ -118,6 +128,9 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
         cursor.execute("SELECT BRANCH_NAME FROM BRANCH ORDER BY ID;")
         branch_names = cursor.fetchall()
         branch_names = [branch[0] for branch in branch_names]
+
+        print("-------------------->>>>>>>>The desired course is ", student_dataframe["desired_course"][0].value) #THIS is a debug print statement to tackle the insert query
+
 
         if student_dataframe["desired_course"][0] not in branch_names:
             return {"message": "Your desired course is not available"}
@@ -243,12 +256,24 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
         return {"message": str(e)+ "LINE 222"}
     
     try:
-        cursor.execute(f"""
+        #testing this try block for insertion of data into the database
+        log.info("INSERTING STUDENT DATA INTO DATABASE BEGINS")
+        insert_data = [student_dataframe["name"][0]] + [int(student_dataframe["age"][0])] + [student_dataframe["desired_course"][0].value]
+        for _ in insert_data:
+            print("THE INSERT DATA IS: ", _)
+        
+        # print("The student dataframe is ", student_dataframe.to_string())
+
+        #code working till here ???????????????????????????????????????????????
+        cursor.execute("""
             INSERT INTO Student (NAME, AGE, DESIRED_COURSE)
             VALUES (?, ?, ?);
             SELECT SCOPE_IDENTITY() AS student_id;
-        """, (student_dataframe["name"][0], int(student_dataframe["age"][0]), student_dataframe["desired_course"][0]))
+        """, *insert_data)
         student_id = int(cursor.fetchone()[0])
+
+        log.info("INSERTING STUDENT DATA INTO DATABASE COMPLETED")
+
         
         for subject, mark in student_dataframe["marksheet"][0].items():
             cursor.execute("SELECT ID FROM SUBJECT WHERE SUBJECT_NAME = ?;", subject)
