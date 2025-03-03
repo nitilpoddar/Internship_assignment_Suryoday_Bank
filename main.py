@@ -6,6 +6,7 @@ from enums.enums import Gender, Course, Subjects
 import re
 import pandas as pd
 import numpy as np
+import logging as log
 
 
 
@@ -34,6 +35,17 @@ class Student(BaseModel):
     qualifying_result: dict[ str , bool] | None = None
     desired_course: Course
 
+    #-----------------!! AGE VALIDATION !!-----------------#
+    @field_validator("age", mode="before")
+    @classmethod
+    def validate_age(cls, value):
+        if value < 17 or value > 25:
+            raise ValueError("Your age should be between 17 and 25")
+        log.info("AGE VALIDATED")
+        return value
+    
+    #-----------------!! NAME validation !!-----------------#
+
     #moved the name validation part here because of code confusion         !!!!!!!!!!!!!!!!!!!! ----name validation---- !!!!!!!!!!!!!!!!!!!!
     @field_validator("name", mode="before")
     @classmethod
@@ -41,24 +53,27 @@ class Student(BaseModel):
         
         if not re.search(r'^[A-Za-z][A-Za-z\s]*$', value):
             raise ValueError("LINE 41 Invalid Name or problem with name")
+        log.info("NAME VALIDATED")
         return value.upper()
+    
+
     
     #-----------------!! MARKSHEET validation !!-----------------#
 
     @field_validator("marksheet", mode="before")
     @classmethod
-    def validate_name(cls, value):
+    def validate_marksheet(cls, value):
 
         if len(value) != 6:
             raise ValueError("Invalid number of subjects: Please provide marks for 6 subjects")
         
         student_subjects = {k.upper(): val for k, val in value.items()}
-        for k,v in student_subjects:
+        for k,v in student_subjects.items():
             if not re.search(r'^[A-Za-z][A-Za-z0-9\s]*$', k):
                 raise ValueError("Invalid Subject Name")
             if v < 0 or v > 100:
                 raise ValueError("Invalid Marks: Marks should be between 0 and 100")
-        
+        log.info("MARKSHEET VALIDATED")
         return {key.upper(): val for key, val in value.items()}
 
         
@@ -90,21 +105,11 @@ app = FastAPI()
 @app.post("/")
 async def Validate_student(student: Student, cursor = Depends(get_cursor)):
     student_dataframe = pd.DataFrame([student.model_dump()])
-
-    print(student_dataframe["marksheet"])
-    # return {"message": "Student data validated successfully"}
-
-    #-----------------!! AGE validation !!-----------------#
-    try:
-        if student_dataframe["age"] < 17 or student_dataframe["age"] > 25:
-            return {"message": "Student age should be between 17 and 25"}
-    except Exception as e:
-        return {"message": e}
-    
+        
     #-----------------!! DESIRED COURSE validation !!-----------------#
     
     try:
-        cursor.execute("SELECT DISTINCT(BRANCH_NAME) FROM BRANCH ORDER BY ID;")
+        cursor.execute("SELECT BRANCH_NAME FROM BRANCH ORDER BY ID;")
         branch_names = cursor.fetchall()
         branch_names = [branch[0] for branch in branch_names]
 
@@ -113,4 +118,42 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
     except Exception as e:
         return {"message": e}
     
+    log.info("DESIRED COURSE VALIDATED")
+    
+    #-----------------!! STUDENT EXAM QUALIFICATION VALIDATION validation FOR DESIRED COURSE !!-----------------#
+    
+    try:
+        cursor.execute("""
+                       SELECT QF.EXAM_NAME 
+                        FROM DEGREE D 
+                        INNER JOIN QUALIFY_EXAM QF ON D.QUALIFY_ID = QF.ID
+                        INNER JOIN BRANCH B ON B.DEGREE_ID = D.ID
+
+                        WHERE B.BRANCH_NAME = ?;""", student_dataframe["desired_course"][0])
+        exam_name = cursor.fetchone()[0]
+        print("THE EXAM NAME IS: ", exam_name)
+
+        qualify_exam_keys = [k.upper() for k in student_dataframe["qualifying_result"][0].keys()]
+
+        for m in student_dataframe["qualifying_result"][0].keys():
+            print("THE KEYS ARE: ", m)
+        
+        log.info("QUALIFY EXAM KEYS FETCHED")
+
+        print("THE QUALIFY EXAM KEYS ARE: ", qualify_exam_keys)
+        
+        if not exam_name == 'NONE':
+            
+            if exam_name not in qualify_exam_keys:
+                return {"message": f"You have not qualified the {exam_name} exam for the desired course LINE 134"}
+            elif student_dataframe["qualifying_result"][0][exam_name] == False:
+                return {"message": f"You have not qualified the {exam_name} exam for the desired course LINE 136"}
+        
+    except Exception as e:
+        return {"message": str(e)+ "LINE 154"}
+    
+
+
+    return {"message": "Data is good till now"}
+
     
