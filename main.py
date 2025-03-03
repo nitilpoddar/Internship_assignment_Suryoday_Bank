@@ -218,16 +218,26 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
                 })
         log.info("RECOMMENDED COURSES FETCHED")
 
+        cursor.execute("""
+            INSERT INTO Student (NAME, AGE, DESIRED_COURSE)
+            VALUES (?, ?, ?);
+            SELECT SCOPE_IDENTITY() AS student_id;
+        """, (student_dataframe["name"][0], student_dataframe["age"][0], student.desired_course))
+        student_id = int(cursor.fetchone()[0])
+        
+        for subject, mark in student_dataframe["marksheet"][0].items():
+            cursor.execute("SELECT ID FROM SUBJECT WHERE SUBJECT_NAME = ?;", subject)
+            subject_id = cursor.fetchone()[0]
+            cursor.execute("""
+                INSERT INTO StudentSubject (STUDENT_ID, SUBJECT_ID, MARKS)
+                VALUES (?, ?, ?);
+            """, (student_id, subject_id, mark))
+        cursor.commit()
+        
+        log.info("STUDENT ENTRY ADDED TO DATABASE")
+        
+        recommended = [{"branch": desired_course, "marks_percent": req_avg, "exam": required_exam}]
         return {"message": "You are eligible for the desired course", "recommended_courses": recommended}
     
     except Exception as e:
         return {"message": str(e)+ "LINE 222"}
-
-
-
-    
-
-
-    
-
-    
