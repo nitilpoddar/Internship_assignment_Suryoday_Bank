@@ -35,3 +35,115 @@ CREATE TABLE BRANCH_SUBJECT (
     FOREIGN KEY (BRANCH_ID) REFERENCES BRANCH(ID),
     FOREIGN KEY (SUBJECT_ID) REFERENCES SUBJECT(ID)
 );
+
+
+
+
+
+
+
+try:
+        
+        #validatio for age
+        if student_dataframe["age"][0] < 17 or student_dataframe["age"][0] > 25:
+            raise Exception("LINE 85Invalid Age")
+        
+        #validation for proper subjexts
+        if( len(student.marksheet.keys()) > 6 or len(student.marksheet.keys()) < 6):
+            raise Exception("LINE 89 Invalid Count of subjects: 6 subjects are required")
+         
+        subject_list = {Subject.value for Subject in Subjects }
+
+        # print(subject_list)
+        student_subjects = set(student.marksheet.keys())
+        invalid_subjects = student_subjects - subject_list
+        if student_subjects - subject_list:
+            raise Exception(f"LINE 97Invalid Subjects : {invalid_subjects}")
+        
+        #validationb for marks
+        s_marks = pd.DataFrame([student.marksheet])
+        if s_marks.applymap(lambda x: x < 0 or x > 100).any().any():
+            raise Exception("LINE 102Invalid Marks: Marks should be between 0 and 100")
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        #validation for qualifying exam  result and checking if the student can take admission in the desired course
+        # cursor = get_cursor()
+        
+
+        
+        #i will fetch the list of courses from the database and check if the student's desired course is in it or not
+        # try:
+        #     BRANCHES = cursor.execute("SELECT BRANCH_NAME FROM BRANCH ORDER BY ID;")
+        #     BRANCHES = BRANCHES.fetchall()
+        #     #this is just a check to see branches is being extracted succesfully
+        #     # for branch in BRANCHES:
+        #     #     print(branch[0], end="\n")
+        #     # print("BRANCH PRINTED SUCCESSFULLY")
+
+        # except Exception as e:
+        #     print("Error while getting branches: message: ", e)
+
+
+        course = [member.value for member in Course if member.value == student.desired_course]
+        if len(course) == 0:
+            raise Exception("LINE 137 Invalid Desired Course")
+        # return {"Message": f"{course[0]}"}
+
+        cursor.execute(f"""
+        SELECT SUBJECT_NAME 
+        FROM SUBJECT
+        INNER JOIN BRANCH_SUBJECT ON SUBJECT.ID = BRANCH_SUBJECT.SUBJECT_ID
+        INNER JOIN BRANCH ON BRANCH.ID = BRANCH_SUBJECT.BRANCH_ID
+        WHERE BRANCH_NAME = ?;
+        """, student.desired_course.value.upper())
+        
+        subjects_in_course = {row[0] for row in cursor.fetchall()} #so this will give a list of required subjects for a branch
+        for sub in subjects_in_course:
+            if not sub in {key.upper() for key in student.marksheet.keys()}:   #checking if the subjects in the Degree braanch are in the subjects provided by the student
+                # print(subjects_in_course)
+                raise Exception(f"LINE 155 Invalid Subjects: Required subjects for this {student.desired_course} do not match with the subjects provided")
+
+        
+        
+        AVG_MARKS = int(np.mean(list(student.marksheet.values())))
+
+        cursor.execute("""
+        SELECT MARKS_PERCENT
+                       FROM BRANCH 
+                       WHERE BRANCH_NAME = ?;
+        """, student.desired_course.value.upper())
+        avg_marks_required = cursor.fetchall()[0][0]
+
+        if AVG_MARKS < avg_marks_required:
+            cursor.execute("""SELECT B.BRANCH_NAME, S.SUBJECT_NAME
+                           FROM BRANCH B 
+                            INNER JOIN BRANCH_SUBJECT BS ON B.ID = BS.BRANCH_ID
+                            INNER JOIN SUBJECT S ON S.ID = BS.SUBJECT_ID
+                            WHERE MARKS_PERCENT <= ?;""", AVG_MARKS)
+            branches = cursor.fetchall()
+            branches = pd.DataFrame(branches)
+
+                
+        return {"Message": "seems fine now and subjects also match with the desired course"}
+
+
+    except Exception as e:
+        return {"Error Message: ": f'{str(e)} line 125'}
+        
+    
+
+

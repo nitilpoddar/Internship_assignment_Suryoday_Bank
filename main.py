@@ -23,18 +23,6 @@ def get_cursor():
         cursor.close()
         conn.close()
 
-# def execute_query(query: str, cursor):
-#     cursor.execute(query)
-#     cursor.commit()
-#     result = cursor.fetchall()
-#     return result
-
-
-        
-    
-
-
-
 
 # using pydantic to create model for the student data 
 
@@ -46,7 +34,36 @@ class Student(BaseModel):
     qualifying_result: dict[ str , bool] | None = None
     desired_course: Course
 
+    #moved the name validation part here because of code confusion         !!!!!!!!!!!!!!!!!!!! ----name validation---- !!!!!!!!!!!!!!!!!!!!
+    @field_validator("name", mode="before")
+    @classmethod
+    def validate_name(cls, value):
+        
+        if not re.search(r'^[A-Za-z][A-Za-z\s]*$', value):
+            raise ValueError("LINE 41 Invalid Name or problem with name")
+        return value.upper()
+    
+    #-----------------!! MARKSHEET validation !!-----------------#
 
+    @field_validator("marksheet", mode="before")
+    @classmethod
+    def validate_name(cls, value):
+
+        if len(value) != 6:
+            raise ValueError("Invalid number of subjects: Please provide marks for 6 subjects")
+        
+        student_subjects = {k.upper(): val for k, val in value.items()}
+        for k,v in student_subjects:
+            if not re.search(r'^[A-Za-z][A-Za-z0-9\s]*$', k):
+                raise ValueError("Invalid Subject Name")
+            if v < 0 or v > 100:
+                raise ValueError("Invalid Marks: Marks should be between 0 and 100")
+        
+        return {key.upper(): val for key, val in value.items()}
+
+        
+    #----------------Gender validation----------------#
+        
     @field_validator("gender", mode="before")
     @classmethod
     def check_gender(cls, value):
@@ -66,100 +83,34 @@ class Student(BaseModel):
         
 app = FastAPI() 
 
-def validate_name(name):
-    return bool(re.search(r'^[A-Z][A-Z\s]*$', name))
+
 
 #-----------------!! main validation endpoint !!-----------------#
 # this endpoint will be used to validate the student data
 @app.post("/")
 async def Validate_student(student: Student, cursor = Depends(get_cursor)):
-    s_data = pd.DataFrame([student.model_dump()])
+    student_dataframe = pd.DataFrame([student.model_dump()])
 
+    print(student_dataframe["marksheet"])
+    # return {"message": "Student data validated successfully"}
+
+    #-----------------!! AGE validation !!-----------------#
     try:
-        # validation for name
-        name = s_data["name"].apply(lambda x: re.sub(r'\s+', ' ', x.strip()).upper())
-        
-        if not validate_name(name[0]):
-            raise Exception("LINE 82Invalid Name")
-        #validatio for age
-        if s_data["age"][0] < 17 or s_data["age"][0] > 25:
-            raise Exception("LINE 85Invalid Age")
-        
-        #validation for proper subjexts
-        if( len(student.marksheet.keys()) > 6 or len(student.marksheet.keys()) < 6):
-            raise Exception("LINE 89 Invalid Count of subjects: 6 subjects are required")
-         
-        subject_list = {Subject.value for Subject in Subjects }
-
-        # print(subject_list)
-        student_subjects = set(student.marksheet.keys())
-        invalid_subjects = student_subjects - subject_list
-        if student_subjects - subject_list:
-            raise Exception(f"LINE 97Invalid Subjects : {invalid_subjects}")
-        
-        #validationb for marks
-        s_marks = pd.DataFrame([student.marksheet])
-        if s_marks.applymap(lambda x: x < 0 or x > 100).any().any():
-            raise Exception("LINE 102Invalid Marks: Marks should be between 0 and 100")
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        #validation for qualifying exam  result and checking if the student can take admission in the desired course
-        # cursor = get_cursor()
-        
-
-        
-        #i will fetch the list of courses from the database and check if the student's desired course is in it or not
-        # try:
-        #     BRANCHES = cursor.execute("SELECT BRANCH_NAME FROM BRANCH ORDER BY ID;")
-        #     BRANCHES = BRANCHES.fetchall()
-        #     #this is just a check to see branches is being extracted succesfully
-        #     # for branch in BRANCHES:
-        #     #     print(branch[0], end="\n")
-        #     # print("BRANCH PRINTED SUCCESSFULLY")
-
-        # except Exception as e:
-        #     print("Error while getting branches: message: ", e)
-
-
-        course = [member.value for member in Course if member.value == student.desired_course]
-        if len(course) == 0:
-            raise Exception("LINE 137 Invalid Desired Course")
-        # return {"Message": f"{course[0]}"}
-
-        cursor.execute(f"""
-        SELECT SUBJECT_NAME 
-        FROM SUBJECT
-        INNER JOIN BRANCH_SUBJECT ON SUBJECT.ID = BRANCH_SUBJECT.SUBJECT_ID
-        INNER JOIN BRANCH ON BRANCH.ID = BRANCH_SUBJECT.BRANCH_ID
-        WHERE BRANCH_NAME = '{course[0]}';
-        """)
-        
-        subjects_in_course = cursor.fetchall()
-        for sub in subjects_in_course:
-            if not sub in subjects_in_course:
-                print(subjects_in_course)
-                raise Exception(f"LINE 153 Invalid Subjects: Required subjects for this {student.desired_course} do not match with the subjects provided")
-
-        return {"Message": "seems fine now and subjects also match with the desired course"}
-
-
+        if student_dataframe["age"] < 17 or student_dataframe["age"] > 25:
+            return {"message": "Student age should be between 17 and 25"}
     except Exception as e:
-        return {"Error Message: ": f'{str(e)} line 125'}
-        
+        return {"message": e}
     
+    #-----------------!! DESIRED COURSE validation !!-----------------#
+    
+    try:
+        cursor.execute("SELECT DISTINCT(BRANCH_NAME) FROM BRANCH ORDER BY ID;")
+        branch_names = cursor.fetchall()
+        branch_names = [branch[0] for branch in branch_names]
 
-
+        if student_dataframe["desired_course"][0] not in branch_names:
+            return {"message": "Your desired course is not available"}
+    except Exception as e:
+        return {"message": e}
+    
+    
