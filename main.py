@@ -279,13 +279,15 @@ async def Validate_student(student: Student, cursor = Depends(get_cursor)):
 
         
 
-        conn.commit()
+        
+        cursor.nextset()
+
 
         student_id = cursor.fetchall()[0][0]
-        print("THE STUDENT ID IS: ", student_id)
+        print("THE STUDENT ID IS: ", student_id) #for debugging
         
         log.info("STUDENT ID FETCHED")
-
+        conn.commit()
         
 
         
